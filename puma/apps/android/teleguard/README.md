@@ -8,6 +8,7 @@ The application can be downloaded in
 [the Google PlayStore](https://play.google.com/store/apps/details?id=ch.swisscows.messenger.teleguardapp).
 
 ### Prerequisites
+
 - The application installed on your device
 - Registration (no personal information such as a phone number is required)
 
@@ -16,25 +17,26 @@ The application can be downloaded in
 Initialization is done in the following way:
 
 ```python
-from puma.apps.android.teleguard.teleguard import TeleguardActions
+from puma.apps.android.teleguard.teleguard import TeleGuard
 
-phone = TeleguardActions("emulator-5444")
+phone = TeleGuard("emulator-5444")
 ```
 
 ### Navigating the UI
 
-You can go to the Teleguard start screen (the screen you see when opening the app), and opening a specific conversation:
+You can go to the TeleGuard start screen (the screen you see when opening the app), and opening a specific conversation:
 
 ```python
-phone.return_to_homescreen()  # returns to the WhatsApp home screen
-phone.select_chat("Bob")  # opens the conversation with Bob
-# this method doesn't require you to be at the home screen
-phone.select_group("Guys")  # this call will first go back to the home screen, then open the other conversation
-phone.select_channel("News")
+# 1-on-1 conversation
+phone.go_to_state(phone.chat_state, conversation="Bob")
+# Group chat
+phone.go_to_state(phone.chat_state, conversation="Guys")
+# Channel
+phone.go_to_state(phone.chat_state, conversation="News")
 ```
 
 ### Adding a contact
-You can add a contact of by Teleguard ID:
+You can add a contact of by TeleGuard ID:
 ```python
 phone.add_contact("INSERT THE CONTACT's ID HERE")
 ```
@@ -52,11 +54,45 @@ phone.accept_invite()
 You can send messages. As opposed to adding a contact, you should now use their username.
 
 ```python
-phone.select_chat("Bob")  # open the conversation with Bob 
-phone.send_message("Hi Bob!")  # Send Bob a message
-# but this can be done in one call:
-phone.send_message("Hi Charlie", chat="Charlie")  # This will open the charlie conversation, then send the message
-# !!! Only use the `chat` argument the first time! If not, each send_message call will first exit the current
-# conversation, and then open the conversation again. This happens because Puma cannot detect whether you're already
-# in the desired conversation
+from puma.apps.android.teleguard.teleguard import TeleGuard
+phone = TeleGuard("emulator-5444")
+
+# Send Bob a message
+phone.send_message("Hi Bob!", "Bob")
+# Alternatively, use:
+phone.send_message(message="Hi Charlie", conversation="Charlie")
+# A second message can be sent without supplying the conversation again:
+phone.send_message("Hi Charlie, please reply!")
+```
+### Sending a picture
+
+You can also send pictures, either from the device or by taking a new picture with the camera. 
+
+```python
+from puma.apps.android.teleguard.teleguard import TeleGuard
+phone = TeleGuard("emulator-5444")
+
+# Send Bob a picture, picture_id=1 will send the first picture that pops up the media picker, so this will be the latest picture on device. 
+phone.send_picture(picture_id=1, caption="Hey bob, look at this cool picture!", conversation="Bob")
+# caption is optional, and the conversation argument is not needed when already in a conversation 
+phone.send_picture(picture_id=2)
+# if we do not provide a picture_id, a  picture will be taken using the camera
+phone.send_picture(caption="You want me to buy this?")
+# so when in a conversation, you can leave out all arguments and a picture will be taken and sent without caption
+phone.send_picture()
+```
+
+### Clearing history
+
+The conversation history can be cleared. In Teleguard, this only affects one user: the other user still has the entire
+chat history.
+
+```python
+from puma.apps.android.teleguard.teleguard import TeleGuard
+
+phone_alice = TeleGuard("emulator-5444")
+phone_bob = TeleGuard("emulator-5446")
+
+phone_alice.clear_history(conversation="Bob")
+phone_bob.clear_history(conversation="Alice")
 ```

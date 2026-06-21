@@ -5,6 +5,10 @@ call. The goal is that you can focus on *what* should happen rather than *how* t
 code to "tap on Bob's conversation on Alice's phone, enter the message, and press send", you can simply write "send a
 Telegram message to Bob from Alice's phone".
 
+![](images/puma_demo.gif)
+
+See the full demo video [here](https://archive.org/details/puma-demo-2025).
+
 To execute actions on the mobile device, Puma uses [Appium](https://appium.io/), and open-source project for UI
 automation.
 
@@ -55,6 +59,9 @@ The code below shows a small example on how to search for the Eiffel Tower in Go
 
 ```python
 from puma.apps.android.google_maps.google_maps import GoogleMapsActions
+from puma.utils import configure_default_logging
+
+configure_default_logging()# Use Puma's logging configuration. You can also implement your own
 
 phone = GoogleMapsActions("emulator-5444")
 phone.search_place('eiffel tower')
@@ -71,13 +78,32 @@ to do this manually the first time while running Puma. After registering, you ca
 with the code below:
 
 ```python
-from puma.apps.android.whatsapp.whatsapp import WhatsappActions
+from puma.apps.android.whatsapp.whatsapp import WhatsApp
+from puma.utils import configure_default_logging
 
-alice = WhatsappActions("<INSERT UDID HERE>")  # Initialize a connection with device
-alice.create_new_chat(contact="<Insert the contact name>",
+configure_default_logging() # Use Puma's logging configuration. You can also implement your own
+
+alice = WhatsApp("<INSERT UDID HERE>", "com.whatsapp")  # Initialize a connection with device
+alice.create_new_chat(conversation="<Insert the contact name>",
                       first_message="Hello world!")  # Send a message to contact in your contact list
 alice.send_message("Sorry for the spam :)")  # we can send a second message in the open conversation
 ```
+
+An action might not always execute properly. If you want to verify that the action succeeded, you can add a special
+named argument to the action, which points to the function you want to verify the action with. We supply some
+commonly used verifications for users to use.
+
+For example, verifying a Whatsapp message has been sent:
+
+```python
+from puma.apps.android.whatsapp.whatsapp import WhatsApp
+
+app = WhatsApp('<INSERT UDID HERE>', 'com.whatsapp')
+app.send_message(conversation='Bob', message_text='Sorry for the spam :)', verify_with=app.is_message_marked_sent)
+```
+
+This will verify if the expected message has indeed been sent. If not, it will log this using the Ground Truth logger.
+It will not stop the execution of the following steps. For more information, see the [action](puma/state_graph/action.py) documentation.
 
 Congratulations, you just did a search query in Google Maps and/or sent a WhatsApp message without touching your phone!
 You can now explore what other functions are possible with Puma in [WhatsApp](puma/apps/android/whatsapp/README.md), or
@@ -93,11 +119,13 @@ example implementations:
 * [Google Camera](puma/apps/android/google_camera/google_camera.py)
 * [Google Chrome](puma/apps/android/google_chrome/README.md)
 * [Google Maps](puma/apps/android/google_maps/README.md)
+* [Google Play Store](puma/apps/android/google_play_store/README.md)
 * [Open Camera](puma/apps/android/open_camera/README.md)
 * [Snapchat](puma/apps/android/snapchat/README.md)
 * [Telegram](puma/apps/android/telegram/README.md)
 * [TeleGuard](puma/apps/android/teleguard/README.md)
 * [WhatsApp](puma/apps/android/whatsapp/README.md)
+* [WhatsApp for Business](puma/apps/android/whatsapp_business/README.md)
 
 Right now only Android is supported.
 
@@ -131,32 +159,35 @@ most methods give you the option to navigate to a specific conversation. 2 examp
 ##### Example 1
 
 ```python
-from puma.apps.android.whatsapp.whatsapp import WhatsappActions
+from puma.apps.android.whatsapp.whatsapp import WhatsApp
+from puma.utils import configure_default_logging
 
-alice = WhatsappActions("emulator-5554")  # initialize a connection with device emulator-5554
-alice.select_chat("Bob")
+configure_default_logging() # Use Puma's logging configuration. You can also implement your own
+alice = WhatsApp("emulator-5554")  # initialize a connection with device emulator-5554
+alice.go_to_state(WhatsApp.chat_state, conversation="Bob")
 alice.send_message("message_text")
 ```
 
-In this example, the message is sent in the current conversation. It is the responsibility of the user to make sure you
-are in the correct conversation. So, you will have to have called `select_chat` first.
+In this example, the message is sent to the conversation with "Bob", by selecting the conversation manually. The second
+example below automates this step.
 
 ##### Example 2
 
 ```python
-from puma.apps.android.whatsapp.whatsapp import WhatsappActions
+from puma.apps.android.whatsapp.whatsapp import WhatsApp
+from puma.utils import configure_default_logging
 
-alice = WhatsappActions("emulator-5554")  # initialize a connection with device emulator-5554
-alice.send_message("message_text", chat="Bob")
+configure_default_logging() # Use Puma's logging configuration. You can also implement your own
+alice = WhatsApp("emulator-5554")  # initialize a connection with device emulator-5554
+alice.send_message("message_text", conversation="Bob")
+alice.send_message("message_text2")
 ```
 
 In the second example, the chat conversation to send the message in is supplied as a parameter. Before the message is
 sent, there will be navigated to the home screen first, and then the chat "Bob" will be selected.
 
-Although the latter one is the safest, it is slower as it will always do some navigation before sending the message.
-When you send multiple messages in the same conversation consecutively, this will result in going to the home screen and
-into the conversation each time you send a message. Therefore, it is advised to use `select_chat` or the optional `chat`
-argument only once, and then sticking to `send_message` without the secondary argument.
+Note that the second message is sent to the current chat conversation. Puma will detect that a conversation was
+already opened, so it will not navigate back to the main screen and reopen the same conversation.
 
 ## Requirements
 
@@ -225,6 +256,34 @@ sudo apt install ffmpeg
 
 This utils code offers a way to process screen recordings (namely concatenating videos and stitching them together
 horizontally).
+
+## Logging in Puma
+
+Puma uses Python’s standard `logging` library.
+
+### Default Behavior
+
+- **As a CLI or main module:** Puma configures default logging so INFO and higher messages are visible.
+- **In Jupyter notebooks:** Puma enables default logging so logs are visible in notebook cells.
+- **As a module in another project:** Puma does not configure logging; messages are only shown if your application configures logging.
+
+### Ground Truth Logging
+
+Puma contains a separate 'Ground Truth' logger (GTL), which logs all actions and navigation steps that are performed on a
+device during a Puma run. These logs are stored in separate log files with the `_gtl` suffix. The log lines produced by
+this logger are also present in the regular log files, but the GTL logs only contain information about actions on a device.
+
+### How to See Puma’s Logs
+
+To see Puma logs in your own script, opt-in to Puma's default log format and level by calling:
+
+```python
+from puma.utils import configure_default_logging
+configure_default_logging()
+```
+
+This is also shown in the examples above.
+If you want to use your own logging format, you can configure Python logging (e.g., with `logging.basicConfig(level=logging.INFO)`).
 
 ## Troubleshooting
 
@@ -312,3 +371,26 @@ Some applications have pop-ups which appear the first time that the application 
 Puma does not handle these pop-ups, these should be manually clicked once to remove them.
 The same holds for pop-ups that request permissions, these should be manually clicked.
 Note: If your app has other pop-ups that happen regularly, Puma should support these.
+
+## Citation
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.fsidi.2025.301985-blue)](https://doi.org/10.1016/j.fsidi.2025.301985)
+
+If you use Puma in your research, please cite our paper:
+```bibtex
+@article{CLAIJSWART2025301985,
+  title = {Automatically generating digital forensic reference data triggered by mobile application updates},
+  journal = {Forensic Science International: Digital Investigation},
+  volume = {54},
+  pages = {301985},
+  year = {2025},
+  issn = {2666-2817},
+  doi = {https://doi.org/10.1016/j.fsidi.2025.301985},
+  url = {https://www.sciencedirect.com/science/article/pii/S2666281725001258},
+  author = {Angelina A. Claij-Swart and Erik Oudsen and Bouke Timbermont and Christopher Hargreaves and Lena L. Voigt},
+  keywords = {Digital forensics, Datasets, Reference data, Data synthesis, Tool validation, Tool testing, Mobile forensics},
+  abstract = {Mobile applications are subject to frequent updates, which poses a challenge for validating digital forensic tools. This paper presents an approach to automate the generation of reference data on an ongoing basis, and how this can be integrated into the overall validation process of a digital forensic analysis platform. Specifically, it describes the architecture of the mobile data synthesis framework Puma, shares its capabilities via an open-source project, and shows how it can be used in a tool testing workflow triggered by application updates. The value of this approach is demonstrated with three example use cases, documenting the use of the approach over six months and reporting insights and experiences gained from this integration. Finally, this work highlights additional contributions the proposed approach and tooling could make to the digital forensics community.}
+}
+```
+
+### Plain text
+Claij-Swart, A. A., Oudsen, E., Timbermont, B., Hargreaves, C., & Voigt, L. L. (2025). Automatically generating digital forensic reference data triggered by mobile application updates. Forensic Science International: Digital Investigation, 54(Supplement), 301985. https://doi.org/10.1016/j.fsidi.2025.301985

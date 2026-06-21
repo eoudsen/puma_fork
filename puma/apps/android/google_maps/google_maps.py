@@ -3,7 +3,9 @@ from time import sleep
 from typing import Dict
 
 from appium.webdriver.common.appiumby import AppiumBy
+from typing_extensions import deprecated
 
+from puma.apps.android import log_action
 from puma.apps.android.appium_actions import AndroidAppiumActions, supported_version
 from puma.utils.route_simulator import RouteSimulator
 
@@ -15,7 +17,9 @@ class TransportType(Enum):
     BIKE = "bike"
 
 
-@supported_version("11.119.0101")
+@deprecated('This class does not use the Puma state machine, and will therefore not be maintained. ' +
+            'If you want to add functionality, please rewrite this class using StateGraph as the abstract base class.')
+@supported_version("26.10.01")
 class GoogleMapsActions(AndroidAppiumActions):
     def __init__(self,
                  device_udid,
@@ -39,6 +43,10 @@ class GoogleMapsActions(AndroidAppiumActions):
             if not self.app_open():
                 self.activate_app()
 
+    def get_route_simulator(self) -> RouteSimulator:
+        return self.route_simulator
+
+    @log_action
     def search_place(self, search_string: str):
         self._ensure_at_start()
         self.driver.find_element(by=AppiumBy.XPATH, value='//android.widget.TextView[@text="Search here"]').click()
@@ -47,6 +55,7 @@ class GoogleMapsActions(AndroidAppiumActions):
         first_result = '//android.support.v7.widget.RecyclerView[@resource-id="com.google.android.apps.maps:id/typed_suggest_container"]/android.widget.LinearLayout[1]'
         self.driver.find_element(by=AppiumBy.XPATH, value=first_result).click()
 
+    @log_action
     def start_navigation(self, search_string: str, transport_type: TransportType = TransportType.CAR, time_to_wait=10):
         self.search_place(search_string)
         directions_xpath = '//android.widget.Button[starts-with(@content-desc, "Directions to")]'
@@ -62,7 +71,7 @@ class GoogleMapsActions(AndroidAppiumActions):
             self.driver.find_element(by=AppiumBy.XPATH, value=first_option).click()
         mode_xpath = f'//android.widget.LinearLayout[starts-with(@content-desc, "{mode}")]'
         self.driver.find_element(by=AppiumBy.XPATH, value=mode_xpath).click()
-        start_xpath = '//android.widget.Button[@content-desc="Start driving navigation"]'
+        start_xpath = '//android.widget.Button[starts-with(@content-desc, "Start")]'
         for i in range(time_to_wait):
             if self.is_present(start_xpath):
                 self.driver.find_element(by=AppiumBy.XPATH, value=start_xpath).click()
@@ -71,6 +80,7 @@ class GoogleMapsActions(AndroidAppiumActions):
                 sleep(1)
         raise Exception(f'Route was not loaded after {time_to_wait} seconds')
 
+    @log_action
     def start_route(self, from_query: str, to_query: str, speed: int,
                     transport_type: TransportType = TransportType.CAR):
         self.route_simulator.update_speed(0)
